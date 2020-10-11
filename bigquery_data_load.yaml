@@ -1,0 +1,83 @@
+main:
+    params: [args]
+    steps:
+      - initialize:
+          assign:
+            - project: ${args.project}
+            - region: ${args.region}
+            - bucket: ${args.bucket}
+            - dataset: "car_analytics"
+      - listFiles:
+          call: http.post
+          args:
+            url: ${"https://"+region+"-"+project+".cloudfunctions.net/list_files"}
+            body:
+              bucket: ${bucket}
+              prefix: "landing/"
+          result: fileNames
+      - checkFileListLenght:
+          switch:
+            - condition: ${len(fileNames.body.objects) == 0}
+              return: ${"No new files found in gs://"+bucket+"/landing/"}
+          next: moveFilesToProcessing
+      - moveFilesToProcessing:
+          call: http.post
+          args:
+            url: ${"https://"+region+"-"+project+".cloudfunctions.net/move_files"}
+            body:
+              bucket: ${bucket}
+              names: ${fileNames.body.objects}
+              source: "landing"
+              destination: "processing"
+      - checkDatasetExists:
+          try:
+            call: http.get
+            args:
+              url: ${"https://bigquery.googleapis.com/bigquery/v2/projects/"+project+"/datasets/"+dataset}
+              auth:
+                type: OAuth2
+            result: responseMessage
+          except:
+            as: e
+            steps:
+              - known_errors:
+                  switch:
+                    - condition: ${not("HttpError" in e.tags)}
+                      return: "Connection problem."
+                    - condition: ${e.code == 404}
+                      next: createDataset
+                    - condition: ${e.code == 403}
+                      return: "Authentication error."
+              - unhandled_exception:
+                  raise: ${e}
+          next: loadFiles
+      - createDataset:
+          call: http.post
+          args:
+            url: ${"https://bigquery.googleapis.com/bigquery/v2/projects/"+project+"/datasets"}
+            body:
+                datasetReference:
+                  projectId: ${project}
+                  datasetId: ${dataset}
+                location: ${region}
+            auth:
+              type: OAuth2
+      - loadFiles:
+          call: http.post
+          args:
+            url: ${"https://"+region+"-"+project+".cloudfunctions.net/load_files"}
+            body:
+                bucket: ${bucket}
+                names: ${fileNames.body.objects}
+                dataset: ${dataset}
+      - moveFilesToBackup:
+          call: http.post
+          args:
+            url: ${"https://"+region+"-"+project+".cloudfunctions.net/move_files"}
+            body:
+              bucket: ${bucket}
+              names: ${fileNames.body.objects}
+              source: "processing"
+              destination: "backup"
+      - returnStatus:
+          return: "OK"
