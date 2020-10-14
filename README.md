@@ -70,7 +70,7 @@ gcloud services enable \
     storage.googleapis.com
 ```
 
-## Upload data files to bukcet
+### Upload data files to bukcet
 
 Upload sample CSV files to your storage bucket.
 
@@ -119,7 +119,7 @@ gcloud beta workflows execute bigquery_data_load \
 
 ## ⏰ Schedule workflow
 
-### Create Service Account for Cloud Scheduler
+### Create service account for Cloud Scheduler
 
 Let's create a Service Account for Cloud Scheduler which will be responsible for triggering workflows.
 
