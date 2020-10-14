@@ -11,25 +11,25 @@ _Credit: This presentation was inspired by a [Reddit post from wil19558](https:/
 
 A workflow management platform allows you to write, organise, execute, schedule and monitor workflows. A workflow is a collection of data processing setps that could form an ETL (Extract-Transform-Load) pipeline or a Machine Learning pipeline.
 
-With the release of Workflows on Google Cloud it became possible to create a fully serverless workflow manager which is easier to maintain and has a lower cost than other self-hosted or managed services like Apache Airflow or Luigi. Workflows could be a good alternative if you have to manage only a few workflows.
+With the release of [Workflows](https://cloud.google.com/workflows/docs) on Google Cloud it became possible to create a fully serverless workflow manager which is easier to maintain and has a lower cost than other self-hosted or managed services like [Apache Airflow](https://airflow.apache.org/) or [Luigi](https://github.com/spotify/luigi). Workflows could be a good alternative if you have to manage only a few pipelines.
 
-We could basically copy the architecture of Apache Airflow with serverless alternatives. Main components of Apache Airflow are the web server, scheduler, executor, metadata database and workers.
+To create a serverless workflow manager we could basically copy the architecture of Apache Airflow replacing Airflow's components with serverless alternatives. Main components of Apache Airflow are the web server, scheduler, executor, metadata database and workers.
 
 ![Airflow components](img/01.png "Airflow components")
 
 We could use [Cloud Scheduler](https://cloud.google.com/scheduler/docs) as the scheduler component which is responsible for triggering workflows at the right time. Google Cloud's new service, [Workflows](https://cloud.google.com/workflows/docs) can serve as the executor which manages the steps in a workflow and triggers workers to run tasks. We could think of [Cloud Functions](https://cloud.google.com/functions/docs) as workers which are responsible for actually running tasks.
 
-In a serverless setup we don't need a metadata datasbase. A metadata database is basically a shared state that all the components can read from and write to. If we would like to share data between components we need to send that data as the JSON body when calling that component. In this serverless architecture each components is an stateless API.
+In a serverless setup we don't need a metadata datasbase. In Airflow metadata database is basically a shared state that all components can read from and write to. In a serverless architecture if we would like to share data between components we need to send that data as a JSON string (request body) when calling that component. Think of each component as a stateless API.
 
 ![Serverless components](img/02.png "Serverless components")
 
-I compared these two architectures in my presentation. Have a look at the presentation slides for details.
+I compared these two architectures in my presentation. Have a look at the [presentation slides](https://docs.google.com/presentation/d/1PaQQgJTAFKg4dxxost9qJsIKZ_2LqSootdgKT2XAf4k/edit?usp=sharing) for details.
 
-_P.S. I didn't mention in my presentation although it's quite important that Cloud Functions have a 540s timeout. Which means that data processing jobs which take longer time than that would fail. In that case I recommend using [App Engine](https://cloud.google.com/appengine/docs) instead of Cloud Functions._
+_P.S. I didn't mention in my presentation although it's quite important that Cloud Functions have a 540s timeout. Which means that data processing jobs which take longer than that would fail. In that case I recommend using [App Engine](https://cloud.google.com/appengine/docs) instead of Cloud Functions._
 
 ## 🚛 Use case
 
-Let's imagine that we're working for a logistics company. This company has vehicles equiped with sensors. These sensors collect data about the state of each vehicle, they send the collected data to Cloud Storage in the form of CSV files every hour.
+Let's imagine that we're working for a logistics company. This company has vehicles equiped with sensors. These sensors collect data about the state of each vehicle, they send CSV files to Cloud Storage every hour.
 
 Our task is to take the CSV files in Cloud Storage and load all files into a table in BigQuery so analysts and data scientists can access historical data.
 
@@ -70,6 +70,15 @@ gcloud services enable \
     storage.googleapis.com
 ```
 
+## Upload data files to bukcet
+
+Upload sample CSV files to your storage bucket.
+
+```bash
+cd data/
+gsutil cp *.csv gs://${BUKCET}/landing
+```
+
 ## 📤 Deploy Cloud Functions
 
 This repository includes 3 Cloud Functions. These functions contain the business logic corresponding to steps in our workflow.
@@ -86,13 +95,13 @@ gcloud functions deploy list_files \
     --runtime python37 \
     --trigger-http \
     --allow-unauthenticated \
-    --region ${REGION}
+    --region=${REGION}
 ```
 Run the same command for each function.
 
 ## 📤 Deploy workflow
 
-Our workflow is defined in `bigquery_data_load.yaml` file. Workflows requires you to write your pipelines in YAML. I recommend reviewing the [syntax reference](https://cloud.google.com/workflows/docs/reference/syntax) for writing YAML workflows. Let's deploy our worlfow by running the following command. You cannot deploy your workflow to any region, make sure that the region you're using is supported by Workflows.
+Our workflow is defined in `bigquery_data_load.yaml` file. Workflows require you to write your pipelines in YAML. I recommend reviewing the [syntax reference](https://cloud.google.com/workflows/docs/reference/syntax) for writing YAML workflows. Let's deploy our worlfow by running the following command. You cannot deploy your workflow to any region, make sure that the region you're using is supported by Workflows.
 
 ```bash
 gcloud beta workflows deploy bigquery_data_load \
